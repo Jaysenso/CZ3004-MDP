@@ -1,0 +1,737 @@
+{
+  "cells": [
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "hrsaDfdVHzxt"
+      },
+      "source": [
+        "# MDP - Training with YOLOv5\n",
+        "\n",
+        "This notebook is just a summarized, unbranded version of the one provided by [Ultralytics](https://colab.research.google.com/github/ultralytics/yolov5/blob/master/tutorial.ipynb)\n"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "yNveqeA1KXGy"
+      },
+      "source": [
+        "# Step 1: Install Requirements"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": 1,
+      "metadata": {
+        "id": "kTvDNSILZoN9"
+      },
+      "outputs": [
+        {
+          "name": "stdout",
+          "output_type": "stream",
+          "text": [
+            "Cloning into 'yolov5'...\n",
+            "remote: Enumerating objects: 16517, done.\u001b[K\n",
+            "remote: Counting objects: 100% (115/115), done.\u001b[K\n",
+            "remote: Compressing objects: 100% (99/99), done.\u001b[K\n",
+            "remote: Total 16517 (delta 47), reused 50 (delta 16), pack-reused 16402\u001b[K\n",
+            "Receiving objects: 100% (16517/16517), 15.18 MiB | 10.96 MiB/s, done.\n",
+            "Resolving deltas: 100% (11307/11307), done.\n",
+            "/hdd1/samic/yongjian/samic/personal/yolov5\n",
+            "Note: you may need to restart the kernel to use updated packages.\n",
+            "Setup complete. Using torch 2.1.0 (NVIDIA RTX A5000)\n"
+          ]
+        }
+      ],
+      "source": [
+        "#clone YOLOv5 and \n",
+        "!git clone https://github.com/ultralytics/yolov5  # clone repo\n",
+        "%cd yolov5\n",
+        "%pip install -qr requirements.txt # install dependencies\n",
+        "\n",
+        "import torch\n",
+        "import os\n",
+        "from IPython.display import Image, clear_output  # to display images\n",
+        "\n",
+        "print(f\"Setup complete. Using torch {torch.__version__} ({torch.cuda.get_device_properties(0).name if torch.cuda.is_available() else 'CPU'})\")"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "zP6USLgz2f0r"
+      },
+      "source": [
+        "# Step 2: Assemble Our Dataset\n",
+        "\n",
+        "In order to train our custom model, we need to assemble a dataset of representative images with bounding box annotations around the objects that we want to detect. And we need our dataset to be in YOLOv5 format.\n"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": 4,
+      "metadata": {
+        "id": "2jjT5uIHo6l5"
+      },
+      "outputs": [],
+      "source": [
+        "# set up environment\n",
+        "os.environ[\"DATASET_DIRECTORY\"] = \"/content/datasets\""
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "dZUg_Enn1dxc",
+        "outputId": "109fdc67-3746-4f87-9c51-625c4f0c300a"
+      },
+      "outputs": [
+        {
+          "name": "stdout",
+          "output_type": "stream",
+          "text": [
+            "Mounted at /content/drive\n"
+          ]
+        }
+      ],
+      "source": [
+        "# from google.colab import drive\n",
+        "# drive.mount('/content/drive')"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "n-9bqAZsKoQ9"
+      },
+      "source": [
+        "Copy over the pretrained model if any, to use as the starting point"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {
+        "id": "x7hSiABY1mX7"
+      },
+      "outputs": [],
+      "source": [
+        "# !cp \"/content/drive/MyDrive/YOLOv5_FullPretraining.pt\" \"best.pt\""
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "YYrPwOAmKr--"
+      },
+      "source": [
+        "Copy over the dataset and extract it"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {
+        "id": "e7DDRxnj1sFe"
+      },
+      "outputs": [],
+      "source": [
+        "# !cp \"/content/drive/MyDrive/Week8.zip\" \"Week8.zip\""
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": 5,
+      "metadata": {},
+      "outputs": [
+        {
+          "name": "stdout",
+          "output_type": "stream",
+          "text": [
+            "mdp_25.zip  week8_best.pt  Week_8.pt  \u001b[0m\u001b[01;34myolov5\u001b[0m/  YOLOv5_Training.ipynb\n"
+          ]
+        }
+      ],
+      "source": [
+        "ls"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": 6,
+      "metadata": {
+        "id": "OophzbZd1tmx"
+      },
+      "outputs": [],
+      "source": [
+        "!unzip -q mdp_25"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "X7yAi9hd-T4B"
+      },
+      "source": [
+        "# Step 3: Train Our Custom YOLOv5 model\n",
+        "\n",
+        "Here, we are able to pass a number of arguments:\n",
+        "- **img:** define input image size\n",
+        "- **batch:** determine batch size\n",
+        "- **epochs:** define the number of training epochs. (Note: often, 3000+ are common here!)\n",
+        "- **data:** Our dataset locaiton is saved in the `dataset.location`\n",
+        "- **weights:** specify a path to weights to start transfer learning from. Here we choose the generic COCO pretrained checkpoint.\n",
+        "- **cache:** cache images for faster training\n",
+        "- **hyp:** hyperparameters to use"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": 7,
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "0aoEH4Ct2jbs",
+        "outputId": "9b15222d-c0ae-4217-f48c-83eb76e919fc"
+      },
+      "outputs": [
+        {
+          "name": "stdout",
+          "output_type": "stream",
+          "text": [
+            "Fri Mar 22 22:47:55 2024       \n",
+            "+---------------------------------------------------------------------------------------+\n",
+            "| NVIDIA-SMI 530.30.02              Driver Version: 530.30.02    CUDA Version: 12.1     |\n",
+            "|-----------------------------------------+----------------------+----------------------+\n",
+            "| GPU  Name                  Persistence-M| Bus-Id        Disp.A | Volatile Uncorr. ECC |\n",
+            "| Fan  Temp  Perf            Pwr:Usage/Cap|         Memory-Usage | GPU-Util  Compute M. |\n",
+            "|                                         |                      |               MIG M. |\n",
+            "|=========================================+======================+======================|\n",
+            "|   0  NVIDIA RTX A5000                On | 00000000:01:00.0 Off |                    0 |\n",
+            "| 30%   42C    P8               22W / 230W|     82MiB / 23028MiB |      0%      Default |\n",
+            "|                                         |                      |                  N/A |\n",
+            "+-----------------------------------------+----------------------+----------------------+\n",
+            "|   1  NVIDIA RTX A5000                On | 00000000:21:00.0 Off |                    0 |\n",
+            "| 30%   42C    P8               22W / 230W|      8MiB / 23028MiB |      0%      Default |\n",
+            "|                                         |                      |                  N/A |\n",
+            "+-----------------------------------------+----------------------+----------------------+\n",
+            "|   2  NVIDIA RTX A5000                On | 00000000:4B:00.0 Off |                    0 |\n",
+            "| 30%   36C    P8               17W / 230W|      8MiB / 23028MiB |      0%      Default |\n",
+            "|                                         |                      |                  N/A |\n",
+            "+-----------------------------------------+----------------------+----------------------+\n",
+            "|   3  NVIDIA RTX A5000                On | 00000000:4C:00.0 Off |                    0 |\n",
+            "| 30%   45C    P8               15W / 230W|      8MiB / 23028MiB |      0%      Default |\n",
+            "|                                         |                      |                  N/A |\n",
+            "+-----------------------------------------+----------------------+----------------------+\n",
+            "                                                                                         \n",
+            "+---------------------------------------------------------------------------------------+\n",
+            "| Processes:                                                                            |\n",
+            "|  GPU   GI   CI        PID   Type   Process name                            GPU Memory |\n",
+            "|        ID   ID                                                             Usage      |\n",
+            "|=======================================================================================|\n",
+            "|    0   N/A  N/A      2382      G   /usr/lib/xorg/Xorg                           64MiB |\n",
+            "|    0   N/A  N/A      2613      G   /usr/bin/gnome-shell                         12MiB |\n",
+            "|    1   N/A  N/A      2382      G   /usr/lib/xorg/Xorg                            4MiB |\n",
+            "|    2   N/A  N/A      2382      G   /usr/lib/xorg/Xorg                            4MiB |\n",
+            "|    3   N/A  N/A      2382      G   /usr/lib/xorg/Xorg                            4MiB |\n",
+            "+---------------------------------------------------------------------------------------+\n"
+          ]
+        }
+      ],
+      "source": [
+        "!nvidia-smi"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "O9SQ0s0EJ97g"
+      },
+      "source": [
+        "Here, run `!python train.py --img 416 --batch 128 --epochs 150 --data Week8/datav5.yaml --weights best.pt --cache` first, then get the `hyp.yaml` and set flip_lr to 0, as we do not want to flip horizontally to not confuse the left and right arrows. Then, place the `hyp.yaml` back into the appropriate location and execute the command below"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": 13,
+      "metadata": {
+        "id": "eaFNnxLJbq4J"
+      },
+      "outputs": [
+        {
+          "name": "stdout",
+          "output_type": "stream",
+          "text": [
+            "\u001b[34m\u001b[1mtrain: \u001b[0mweights=week8_best.pt, cfg=, data=data.yaml, hyp=yolov5/runs/train/exp/hyp.yaml, epochs=50, batch_size=128, imgsz=416, rect=False, resume=False, nosave=False, noval=False, noautoanchor=False, noplots=False, evolve=None, evolve_population=yolov5/data/hyps, resume_evolve=None, bucket=, cache=ram, image_weights=False, device=, multi_scale=False, single_cls=False, optimizer=SGD, sync_bn=False, workers=8, project=yolov5/runs/train, name=exp, exist_ok=False, quad=False, cos_lr=False, label_smoothing=0.0, patience=100, freeze=[0], save_period=-1, seed=0, local_rank=-1, entity=None, upload_dataset=False, bbox_interval=-1, artifact_alias=latest, ndjson_console=False, ndjson_file=False\n",
+            "\u001b[34m\u001b[1mgithub: \u001b[0mup to date with https://github.com/ultralytics/yolov5 ✅\n",
+            "YOLOv5 🚀 v7.0-294-gdb125a20 Python-3.8.18 torch-2.1.0 CUDA:0 (NVIDIA RTX A5000, 22719MiB)\n",
+            "\n",
+            "\u001b[34m\u001b[1mhyperparameters: \u001b[0mlr0=0.01, lrf=0.01, momentum=0.937, weight_decay=0.0005, warmup_epochs=3.0, warmup_momentum=0.8, warmup_bias_lr=0.1, box=0.05, cls=0.5, cls_pw=1.0, obj=1.0, obj_pw=1.0, iou_t=0.2, anchor_t=4.0, fl_gamma=0.0, hsv_h=0.015, hsv_s=0.7, hsv_v=0.4, degrees=0.0, translate=0.1, scale=0.5, shear=0.0, perspective=0.0, flipud=0.0, fliplr=0, mosaic=1.0, mixup=0.0, copy_paste=0.0\n",
+            "\u001b[34m\u001b[1mComet: \u001b[0mrun 'pip install comet_ml' to automatically track and visualize YOLOv5 🚀 runs in Comet\n",
+            "\u001b[34m\u001b[1mTensorBoard: \u001b[0mStart with 'tensorboard --logdir yolov5/runs/train', view at http://localhost:6006/\n",
+            "Overriding model.yaml nc=31 with nc=2\n",
+            "\n",
+            "                 from  n    params  module                                  arguments                     \n",
+            "  0                -1  1      3520  models.common.Conv                      [3, 32, 6, 2, 2]              \n",
+            "  1                -1  1     18560  models.common.Conv                      [32, 64, 3, 2]                \n",
+            "  2                -1  1     18816  models.common.C3                        [64, 64, 1]                   \n",
+            "  3                -1  1     73984  models.common.Conv                      [64, 128, 3, 2]               \n",
+            "  4                -1  2    115712  models.common.C3                        [128, 128, 2]                 \n",
+            "  5                -1  1    295424  models.common.Conv                      [128, 256, 3, 2]              \n",
+            "  6                -1  3    625152  models.common.C3                        [256, 256, 3]                 \n",
+            "  7                -1  1   1180672  models.common.Conv                      [256, 512, 3, 2]              \n",
+            "  8                -1  1   1182720  models.common.C3                        [512, 512, 1]                 \n",
+            "  9                -1  1    656896  models.common.SPPF                      [512, 512, 5]                 \n",
+            " 10                -1  1    131584  models.common.Conv                      [512, 256, 1, 1]              \n",
+            " 11                -1  1         0  torch.nn.modules.upsampling.Upsample    [None, 2, 'nearest']          \n",
+            " 12           [-1, 6]  1         0  models.common.Concat                    [1]                           \n",
+            " 13                -1  1    361984  models.common.C3                        [512, 256, 1, False]          \n",
+            " 14                -1  1     33024  models.common.Conv                      [256, 128, 1, 1]              \n",
+            " 15                -1  1         0  torch.nn.modules.upsampling.Upsample    [None, 2, 'nearest']          \n",
+            " 16           [-1, 4]  1         0  models.common.Concat                    [1]                           \n",
+            " 17                -1  1     90880  models.common.C3                        [256, 128, 1, False]          \n",
+            " 18                -1  1    147712  models.common.Conv                      [128, 128, 3, 2]              \n",
+            " 19          [-1, 14]  1         0  models.common.Concat                    [1]                           \n",
+            " 20                -1  1    296448  models.common.C3                        [256, 256, 1, False]          \n",
+            " 21                -1  1    590336  models.common.Conv                      [256, 256, 3, 2]              \n",
+            " 22          [-1, 10]  1         0  models.common.Concat                    [1]                           \n",
+            " 23                -1  1   1182720  models.common.C3                        [512, 512, 1, False]          \n",
+            " 24      [17, 20, 23]  1     18879  models.yolo.Detect                      [2, [[10, 13, 16, 30, 33, 23], [30, 61, 62, 45, 59, 119], [116, 90, 156, 198, 373, 326]], [128, 256, 512]]\n",
+            "Model summary: 214 layers, 7025023 parameters, 7025023 gradients, 16.0 GFLOPs\n",
+            "\n",
+            "Transferred 343/349 items from week8_best.pt\n",
+            "\u001b[34m\u001b[1mAMP: \u001b[0mchecks passed ✅\n",
+            "\u001b[34m\u001b[1moptimizer:\u001b[0m SGD(lr=0.01) with parameter groups 57 weight(decay=0.0), 60 weight(decay=0.001), 60 bias\n",
+            "WARNING ⚠️ DP not recommended, use torch.distributed.run for best DDP Multi-GPU results.\n",
+            "See Multi-GPU Tutorial at https://docs.ultralytics.com/yolov5/tutorials/multi_gpu_training to get started.\n",
+            "\u001b[34m\u001b[1mtrain: \u001b[0mScanning /hdd1/samic/yongjian/samic/personal/train/labels.cache... 843 im\u001b[0m\n",
+            "\u001b[34m\u001b[1mtrain: \u001b[0mCaching images (0.3GB ram): 100%|██████████| 843/843 [00:00<00:00, 3548.4\u001b[0m\n",
+            "\u001b[34m\u001b[1mval: \u001b[0mScanning /hdd1/samic/yongjian/samic/personal/valid/labels.cache... 14 image\u001b[0m\n",
+            "\u001b[34m\u001b[1mval: \u001b[0mCaching images (0.0GB ram): 100%|██████████| 14/14 [00:00<00:00, 719.00it/s\u001b[0m\n",
+            "\n",
+            "\u001b[34m\u001b[1mAutoAnchor: \u001b[0m6.23 anchors/target, 0.999 Best Possible Recall (BPR). Current anchors are a good fit to dataset ✅\n",
+            "Plotting labels to yolov5/runs/train/exp3/labels.jpg... \n",
+            "Image sizes 416 train, 416 val\n",
+            "Using 8 dataloader workers\n",
+            "Logging results to \u001b[1myolov5/runs/train/exp3\u001b[0m\n",
+            "Starting training for 50 epochs...\n",
+            "\n",
+            "      Epoch    GPU_mem   box_loss   obj_loss   cls_loss  Instances       Size\n",
+            "       0/49      3.15G     0.1068    0.02022    0.03049        149        416: 1\n",
+            "                 Class     Images  Instances          P          R      mAP50   \n",
+            "                   all         14         14    0.00239      0.714    0.00271   0.000466\n",
+            "\n",
+            "      Epoch    GPU_mem   box_loss   obj_loss   cls_loss  Instances       Size\n",
+            "       1/49      3.15G    0.08584    0.02501    0.02682        141        416: 1\n",
+            "                 Class     Images  Instances          P          R      mAP50   \n",
+            "                   all         14         14    0.00302      0.857     0.0224    0.00388\n",
+            "\n",
+            "      Epoch    GPU_mem   box_loss   obj_loss   cls_loss  Instances       Size\n",
+            "       2/49      3.15G    0.06707    0.02649    0.02159        134        416: 1\n",
+            "                 Class     Images  Instances          P          R      mAP50   \n",
+            "                   all         14         14     0.0036          1      0.828      0.361\n",
+            "\n",
+            "      Epoch    GPU_mem   box_loss   obj_loss   cls_loss  Instances       Size\n",
+            "       3/49      3.15G    0.05365    0.02691    0.01611        127        416: 1\n",
+            "                 Class     Images  Instances          P          R      mAP50   \n",
+            "                   all         14         14    0.00353          1      0.956      0.419\n",
+            "\n",
+            "      Epoch    GPU_mem   box_loss   obj_loss   cls_loss  Instances       Size\n",
+            "       4/49      3.15G    0.04723    0.02455    0.01159        120        416: 1\n",
+            "                 Class     Images  Instances          P          R      mAP50   \n",
+            "                   all         14         14      0.722      0.833       0.93      0.465\n",
+            "\n",
+            "      Epoch    GPU_mem   box_loss   obj_loss   cls_loss  Instances       Size\n",
+            "       5/49      3.15G    0.04533    0.02348   0.008389        124        416: 1\n",
+            "                 Class     Images  Instances          P          R      mAP50   \n",
+            "                   all         14         14      0.811      0.705       0.97      0.516\n",
+            "\n",
+            "      Epoch    GPU_mem   box_loss   obj_loss   cls_loss  Instances       Size\n",
+            "       6/49      3.15G    0.04588    0.02024   0.006182        145        416: 1\n",
+            "                 Class     Images  Instances          P          R      mAP50   \n",
+            "                   all         14         14      0.796      0.739      0.986      0.509\n",
+            "\n",
+            "      Epoch    GPU_mem   box_loss   obj_loss   cls_loss  Instances       Size\n",
+            "       7/49      3.15G    0.04794    0.01767   0.005139        120        416: 1\n",
+            "                 Class     Images  Instances          P          R      mAP50   \n",
+            "                   all         14         14      0.755      0.722      0.995      0.543\n",
+            "\n",
+            "      Epoch    GPU_mem   box_loss   obj_loss   cls_loss  Instances       Size\n",
+            "       8/49      3.15G    0.04694    0.01619   0.004392        126        416: 1\n",
+            "                 Class     Images  Instances          P          R      mAP50   \n",
+            "                   all         14         14      0.509          1      0.803      0.385\n",
+            "\n",
+            "      Epoch    GPU_mem   box_loss   obj_loss   cls_loss  Instances       Size\n",
+            "       9/49      3.15G    0.04586    0.01545   0.003938        143        416: 1\n",
+            "                 Class     Images  Instances          P          R      mAP50   \n",
+            "                   all         14         14      0.708      0.714      0.911      0.558\n",
+            "\n",
+            "      Epoch    GPU_mem   box_loss   obj_loss   cls_loss  Instances       Size\n",
+            "      10/49      3.15G    0.04574    0.01484    0.00408        133        416: 1\n",
+            "                 Class     Images  Instances          P          R      mAP50   \n",
+            "                   all         14         14       0.69      0.857       0.92      0.432\n",
+            "\n",
+            "      Epoch    GPU_mem   box_loss   obj_loss   cls_loss  Instances       Size\n",
+            "      11/49      3.15G    0.04388    0.01389   0.004028        123        416: 1\n",
+            "                 Class     Images  Instances          P          R      mAP50   \n",
+            "                   all         14         14      0.875      0.907      0.995      0.495\n",
+            "\n",
+            "      Epoch    GPU_mem   box_loss   obj_loss   cls_loss  Instances       Size\n",
+            "      12/49      3.15G    0.04287    0.01284   0.003609        132        416: 1\n",
+            "                 Class     Images  Instances          P          R      mAP50   \n",
+            "                   all         14         14      0.603      0.879      0.895       0.45\n",
+            "\n",
+            "      Epoch    GPU_mem   box_loss   obj_loss   cls_loss  Instances       Size\n",
+            "      13/49      3.15G      0.044    0.01113   0.003406        126        416: 1\n",
+            "                 Class     Images  Instances          P          R      mAP50   \n",
+            "                   all         14         14      0.947          1      0.995      0.553\n",
+            "\n",
+            "      Epoch    GPU_mem   box_loss   obj_loss   cls_loss  Instances       Size\n",
+            "      14/49      3.15G    0.04047    0.01109   0.003089        132        416: 1\n",
+            "                 Class     Images  Instances          P          R      mAP50   \n",
+            "                   all         14         14      0.707          1      0.995      0.422\n",
+            "\n",
+            "      Epoch    GPU_mem   box_loss   obj_loss   cls_loss  Instances       Size\n",
+            "      15/49      3.15G     0.0393    0.01077   0.002845        156        416: 1\n",
+            "                 Class     Images  Instances          P          R      mAP50   \n",
+            "                   all         14         14      0.919          1      0.933      0.634\n",
+            "\n",
+            "      Epoch    GPU_mem   box_loss   obj_loss   cls_loss  Instances       Size\n",
+            "      16/49      3.15G    0.03618    0.01001   0.002539        126        416: 1\n",
+            "                 Class     Images  Instances          P          R      mAP50   \n",
+            "                   all         14         14       0.97          1      0.995      0.585\n",
+            "\n",
+            "      Epoch    GPU_mem   box_loss   obj_loss   cls_loss  Instances       Size\n",
+            "      17/49      3.15G    0.03485   0.009396   0.002533        131        416: 1\n",
+            "                 Class     Images  Instances          P          R      mAP50   \n",
+            "                   all         14         14      0.986          1      0.995      0.625\n",
+            "\n",
+            "      Epoch    GPU_mem   box_loss   obj_loss   cls_loss  Instances       Size\n",
+            "      18/49      3.15G    0.03255   0.008814   0.002216        134        416: 1\n",
+            "                 Class     Images  Instances          P          R      mAP50   \n",
+            "                   all         14         14      0.964          1      0.995      0.711\n",
+            "\n",
+            "      Epoch    GPU_mem   box_loss   obj_loss   cls_loss  Instances       Size\n",
+            "      19/49      3.15G    0.03191   0.008335   0.002162        139        416: 1\n",
+            "                 Class     Images  Instances          P          R      mAP50   \n",
+            "                   all         14         14      0.939          1      0.995      0.781\n",
+            "\n",
+            "      Epoch    GPU_mem   box_loss   obj_loss   cls_loss  Instances       Size\n",
+            "      20/49      3.15G    0.03003   0.008387   0.002142        145        416: 1\n",
+            "                 Class     Images  Instances          P          R      mAP50   \n",
+            "                   all         14         14      0.987          1      0.995      0.703\n",
+            "\n",
+            "      Epoch    GPU_mem   box_loss   obj_loss   cls_loss  Instances       Size\n",
+            "      21/49      3.15G    0.03001   0.008222   0.001943        148        416: 1\n",
+            "                 Class     Images  Instances          P          R      mAP50   \n",
+            "                   all         14         14      0.989          1      0.995      0.576\n",
+            "\n",
+            "      Epoch    GPU_mem   box_loss   obj_loss   cls_loss  Instances       Size\n",
+            "      22/49      3.15G     0.0292   0.007915   0.001665        134        416: 1\n",
+            "                 Class     Images  Instances          P          R      mAP50   \n",
+            "                   all         14         14       0.99          1      0.995      0.781\n",
+            "\n",
+            "      Epoch    GPU_mem   box_loss   obj_loss   cls_loss  Instances       Size\n",
+            "      23/49      3.15G    0.02763   0.007348   0.001688        122        416: 1\n",
+            "                 Class     Images  Instances          P          R      mAP50   \n",
+            "                   all         14         14      0.992          1      0.995      0.731\n",
+            "\n",
+            "      Epoch    GPU_mem   box_loss   obj_loss   cls_loss  Instances       Size\n",
+            "      24/49      3.15G    0.02653   0.007481   0.001493        135        416: 1\n",
+            "                 Class     Images  Instances          P          R      mAP50   \n",
+            "                   all         14         14       0.99          1      0.995      0.687\n",
+            "\n",
+            "      Epoch    GPU_mem   box_loss   obj_loss   cls_loss  Instances       Size\n",
+            "      25/49      3.15G    0.02605   0.007371   0.001531        132        416: 1\n",
+            "                 Class     Images  Instances          P          R      mAP50   \n",
+            "                   all         14         14      0.989          1      0.995      0.736\n",
+            "\n",
+            "      Epoch    GPU_mem   box_loss   obj_loss   cls_loss  Instances       Size\n",
+            "      26/49      3.15G    0.02544   0.007371   0.001532        129        416: 1\n",
+            "                 Class     Images  Instances          P          R      mAP50   \n",
+            "                   all         14         14      0.987          1      0.995      0.603\n",
+            "\n",
+            "      Epoch    GPU_mem   box_loss   obj_loss   cls_loss  Instances       Size\n",
+            "      27/49      3.15G    0.02601   0.007062   0.001369        132        416: 1\n",
+            "                 Class     Images  Instances          P          R      mAP50   \n",
+            "                   all         14         14      0.987          1      0.995      0.744\n",
+            "\n",
+            "      Epoch    GPU_mem   box_loss   obj_loss   cls_loss  Instances       Size\n",
+            "      28/49      3.15G    0.02472   0.006931   0.001293        141        416: 1\n",
+            "                 Class     Images  Instances          P          R      mAP50   \n",
+            "                   all         14         14       0.99          1      0.995      0.696\n",
+            "\n",
+            "      Epoch    GPU_mem   box_loss   obj_loss   cls_loss  Instances       Size\n",
+            "      29/49      3.15G    0.02383    0.00705   0.001304        133        416: 1\n",
+            "                 Class     Images  Instances          P          R      mAP50   \n",
+            "                   all         14         14      0.988          1      0.995      0.794\n",
+            "\n",
+            "      Epoch    GPU_mem   box_loss   obj_loss   cls_loss  Instances       Size\n",
+            "      30/49      3.15G    0.02387    0.00687   0.001128        122        416: 1\n",
+            "                 Class     Images  Instances          P          R      mAP50   \n",
+            "                   all         14         14      0.987          1      0.995      0.723\n",
+            "\n",
+            "      Epoch    GPU_mem   box_loss   obj_loss   cls_loss  Instances       Size\n",
+            "      31/49      3.15G     0.0231   0.006861  0.0009674        149        416: 1\n",
+            "                 Class     Images  Instances          P          R      mAP50   \n",
+            "                   all         14         14      0.989          1      0.995      0.749\n",
+            "\n",
+            "      Epoch    GPU_mem   box_loss   obj_loss   cls_loss  Instances       Size\n",
+            "      32/49      3.15G    0.02198    0.00647   0.001099        141        416: 1\n",
+            "                 Class     Images  Instances          P          R      mAP50   \n",
+            "                   all         14         14      0.988          1      0.995      0.782\n",
+            "\n",
+            "      Epoch    GPU_mem   box_loss   obj_loss   cls_loss  Instances       Size\n",
+            "      33/49      3.15G    0.02204   0.006506  0.0009488        130        416: 1\n",
+            "                 Class     Images  Instances          P          R      mAP50   \n",
+            "                   all         14         14      0.988          1      0.995      0.806\n",
+            "\n",
+            "      Epoch    GPU_mem   box_loss   obj_loss   cls_loss  Instances       Size\n",
+            "      34/49      3.15G    0.02208   0.006664  0.0009355        152        416: 1\n",
+            "                 Class     Images  Instances          P          R      mAP50   \n",
+            "                   all         14         14      0.988          1      0.995      0.727\n",
+            "\n",
+            "      Epoch    GPU_mem   box_loss   obj_loss   cls_loss  Instances       Size\n",
+            "      35/49      3.15G    0.02143    0.00655   0.000901        137        416: 1\n",
+            "                 Class     Images  Instances          P          R      mAP50   \n",
+            "                   all         14         14      0.989          1      0.995      0.809\n",
+            "\n",
+            "      Epoch    GPU_mem   box_loss   obj_loss   cls_loss  Instances       Size\n",
+            "      36/49      3.15G    0.02091   0.006597  0.0008775        148        416: 1\n",
+            "                 Class     Images  Instances          P          R      mAP50   \n",
+            "                   all         14         14      0.989          1      0.995      0.739\n",
+            "\n",
+            "      Epoch    GPU_mem   box_loss   obj_loss   cls_loss  Instances       Size\n",
+            "      37/49      3.15G    0.02025   0.006297   0.000891        106        416: 1\n",
+            "                 Class     Images  Instances          P          R      mAP50   \n",
+            "                   all         14         14      0.989          1      0.995      0.809\n",
+            "\n",
+            "      Epoch    GPU_mem   box_loss   obj_loss   cls_loss  Instances       Size\n",
+            "      38/49      3.15G     0.0201   0.006307  0.0008961        134        416: 1\n",
+            "                 Class     Images  Instances          P          R      mAP50   \n",
+            "                   all         14         14       0.99          1      0.995      0.732\n",
+            "\n",
+            "      Epoch    GPU_mem   box_loss   obj_loss   cls_loss  Instances       Size\n",
+            "      39/49      3.15G    0.01993   0.006397  0.0008253        152        416: 1\n",
+            "                 Class     Images  Instances          P          R      mAP50   \n",
+            "                   all         14         14       0.99          1      0.995      0.747\n",
+            "\n",
+            "      Epoch    GPU_mem   box_loss   obj_loss   cls_loss  Instances       Size\n",
+            "      40/49      3.15G    0.01929   0.006451  0.0007475        130        416: 1\n",
+            "                 Class     Images  Instances          P          R      mAP50   \n",
+            "                   all         14         14       0.99          1      0.995       0.73\n",
+            "\n",
+            "      Epoch    GPU_mem   box_loss   obj_loss   cls_loss  Instances       Size\n",
+            "      41/49      3.15G    0.01847   0.006092  0.0007144        134        416: 1\n",
+            "                 Class     Images  Instances          P          R      mAP50   \n",
+            "                   all         14         14       0.99          1      0.995      0.781\n",
+            "\n",
+            "      Epoch    GPU_mem   box_loss   obj_loss   cls_loss  Instances       Size\n",
+            "      42/49      3.15G    0.01829   0.006303  0.0006274        144        416: 1\n",
+            "                 Class     Images  Instances          P          R      mAP50   \n",
+            "                   all         14         14       0.99          1      0.995       0.78\n",
+            "\n",
+            "      Epoch    GPU_mem   box_loss   obj_loss   cls_loss  Instances       Size\n",
+            "      43/49      3.15G    0.01799   0.005975  0.0006168        141        416: 1\n",
+            "                 Class     Images  Instances          P          R      mAP50   \n",
+            "                   all         14         14      0.989          1      0.995      0.799\n",
+            "\n",
+            "      Epoch    GPU_mem   box_loss   obj_loss   cls_loss  Instances       Size\n",
+            "      44/49      3.15G    0.01775   0.006215  0.0005889        143        416: 1\n",
+            "                 Class     Images  Instances          P          R      mAP50   \n",
+            "                   all         14         14      0.989          1      0.995      0.801\n",
+            "\n",
+            "      Epoch    GPU_mem   box_loss   obj_loss   cls_loss  Instances       Size\n",
+            "      45/49      3.15G    0.01716   0.005987  0.0005643        130        416: 1\n",
+            "                 Class     Images  Instances          P          R      mAP50   \n",
+            "                   all         14         14      0.989          1      0.995       0.82\n",
+            "\n",
+            "      Epoch    GPU_mem   box_loss   obj_loss   cls_loss  Instances       Size\n",
+            "      46/49      3.15G    0.01695   0.006237  0.0005101        149        416: 1\n",
+            "                 Class     Images  Instances          P          R      mAP50   \n",
+            "                   all         14         14      0.989          1      0.995      0.813\n",
+            "\n",
+            "      Epoch    GPU_mem   box_loss   obj_loss   cls_loss  Instances       Size\n",
+            "      47/49      3.15G     0.0166   0.005662  0.0004944        128        416: 1\n",
+            "                 Class     Images  Instances          P          R      mAP50   \n",
+            "                   all         14         14      0.989          1      0.995      0.803\n",
+            "\n",
+            "      Epoch    GPU_mem   box_loss   obj_loss   cls_loss  Instances       Size\n",
+            "      48/49      3.15G    0.01655   0.005821  0.0004604        143        416: 1\n",
+            "                 Class     Images  Instances          P          R      mAP50   \n",
+            "                   all         14         14      0.989          1      0.995      0.788\n",
+            "\n",
+            "      Epoch    GPU_mem   box_loss   obj_loss   cls_loss  Instances       Size\n",
+            "      49/49      3.15G    0.01684   0.005959  0.0005027        111        416: 1\n",
+            "                 Class     Images  Instances          P          R      mAP50   \n",
+            "                   all         14         14      0.989          1      0.995      0.807\n",
+            "\n",
+            "50 epochs completed in 0.029 hours.\n",
+            "Optimizer stripped from yolov5/runs/train/exp3/weights/last.pt, 14.3MB\n",
+            "Optimizer stripped from yolov5/runs/train/exp3/weights/best.pt, 14.3MB\n",
+            "\n",
+            "Validating yolov5/runs/train/exp3/weights/best.pt...\n",
+            "Fusing layers... \n",
+            "Model summary: 157 layers, 7015519 parameters, 0 gradients, 15.8 GFLOPs\n",
+            "                 Class     Images  Instances          P          R      mAP50   \n",
+            "                   all         14         14      0.989          1      0.995       0.82\n",
+            "                  Left         14          7      0.986          1      0.995      0.816\n",
+            "                 Right         14          7      0.992          1      0.995      0.823\n",
+            "Results saved to \u001b[1myolov5/runs/train/exp3\u001b[0m\n"
+          ]
+        }
+      ],
+      "source": [
+        "!python yolov5/train.py --img 416 --batch 128 --epochs 50 --data data.yaml --weights week8_best.pt --cache --hyp yolov5/runs/train/exp/hyp.yaml"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": 6,
+      "metadata": {},
+      "outputs": [
+        {
+          "name": "stdout",
+          "output_type": "stream",
+          "text": [
+            "/hdd1/samic/yongjian/samic/personal\n"
+          ]
+        }
+      ],
+      "source": [
+        "cd yongjian/samic/personal"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "jtmS7_TXFsT3"
+      },
+      "source": [
+        "#Run Inference  With Trained Weights\n",
+        "Run inference with a pretrained checkpoint on contents of `test/images` folder downloaded from Roboflow."
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": 14,
+      "metadata": {
+        "id": "TWjjiBcic3Vz"
+      },
+      "outputs": [
+        {
+          "name": "stdout",
+          "output_type": "stream",
+          "text": [
+            "\u001b[34m\u001b[1mdetect: \u001b[0mweights=['yolov5/runs/train/exp3/weights/best.pt'], source=test/images, data=yolov5/data/coco128.yaml, imgsz=[416, 416], conf_thres=0.1, iou_thres=0.45, max_det=1000, device=, view_img=False, save_txt=False, save_csv=False, save_conf=False, save_crop=False, nosave=False, classes=None, agnostic_nms=False, augment=False, visualize=False, update=False, project=yolov5/runs/detect, name=exp, exist_ok=False, line_thickness=3, hide_labels=False, hide_conf=False, half=False, dnn=False, vid_stride=1\n",
+            "YOLOv5 🚀 v7.0-294-gdb125a20 Python-3.8.18 torch-2.1.0 CUDA:0 (NVIDIA RTX A5000, 22719MiB)\n",
+            "\n",
+            "Fusing layers... \n",
+            "Model summary: 157 layers, 7015519 parameters, 0 gradients, 15.8 GFLOPs\n",
+            "image 1/17 /hdd1/samic/yongjian/samic/personal/test/images/Left_24_png.rf.ba04697e529dc23b0b44c14b8c63c938.jpg: 320x416 1 Left, 58.6ms\n",
+            "image 2/17 /hdd1/samic/yongjian/samic/personal/test/images/Left_25_png.rf.d3b5b740e0c0ea5b1664795765de7126.jpg: 320x416 1 Left, 3.7ms\n",
+            "image 3/17 /hdd1/samic/yongjian/samic/personal/test/images/Left_52_png.rf.a5e090567f2649f5ca74ad298454f1e6.jpg: 320x416 1 Left, 3.4ms\n",
+            "image 4/17 /hdd1/samic/yongjian/samic/personal/test/images/Left_53_png.rf.f11f077a2bb4e9bebc72b6ff54918809.jpg: 320x416 1 Left, 3.4ms\n",
+            "image 5/17 /hdd1/samic/yongjian/samic/personal/test/images/Left_56_png.rf.7664510cc5c49197145635009578756a.jpg: 320x416 1 Left, 3.4ms\n",
+            "image 6/17 /hdd1/samic/yongjian/samic/personal/test/images/Left_56_png.rf.fee902bc4782213dd6411ce840c5f2d8.jpg: 320x416 1 Left, 3.4ms\n",
+            "image 7/17 /hdd1/samic/yongjian/samic/personal/test/images/Left_86_png.rf.11f2c91720bc0531776a2f018d8b8105.jpg: 320x416 1 Left, 3.4ms\n",
+            "image 8/17 /hdd1/samic/yongjian/samic/personal/test/images/Left_86_png.rf.b7baca776e39f018507793163ec86523.jpg: 320x416 1 Left, 3.4ms\n",
+            "image 9/17 /hdd1/samic/yongjian/samic/personal/test/images/Left_98_png.rf.35a8c7ee2e9455b0f62854b52dcc9d9a.jpg: 320x416 1 Left, 3.4ms\n",
+            "image 10/17 /hdd1/samic/yongjian/samic/personal/test/images/Left_98_png.rf.915970f3dbdd64ab604c4c6420603f59.jpg: 320x416 1 Left, 3.4ms\n",
+            "image 11/17 /hdd1/samic/yongjian/samic/personal/test/images/Left_99_png.rf.1ad20f425b1cd5e024bc36edd6efe29c.jpg: 320x416 1 Left, 3.4ms\n",
+            "image 12/17 /hdd1/samic/yongjian/samic/personal/test/images/Left_99_png.rf.40768916f64bd67848a7fa239910ef85.jpg: 320x416 1 Left, 3.4ms\n",
+            "image 13/17 /hdd1/samic/yongjian/samic/personal/test/images/Right_91_png.rf.0269ac095a1610bc3148fee558e800da.jpg: 320x416 1 Right, 3.4ms\n",
+            "image 14/17 /hdd1/samic/yongjian/samic/personal/test/images/predicted_Up_actual_Right_59_png.rf.ec804c64c3b503a9e9226bc0e60409c7.jpg: 320x416 1 Right, 3.4ms\n",
+            "image 15/17 /hdd1/samic/yongjian/samic/personal/test/images/predicted_Up_actual_Right_95_png.rf.a3d90b418b2752825f9e5e6e5297871e.jpg: 320x416 1 Right, 3.4ms\n",
+            "image 16/17 /hdd1/samic/yongjian/samic/personal/test/images/predicted_Up_actual_Right_9_png.rf.44620021c69586d294622f7a138fab15.jpg: 320x416 1 Right, 3.4ms\n",
+            "image 17/17 /hdd1/samic/yongjian/samic/personal/test/images/predicted_Y_actual_Right_11_png.rf.d97c5b7d56a82bccf439b1c43fb6cdea.jpg: 320x416 1 Right, 3.4ms\n",
+            "Speed: 0.1ms pre-process, 6.6ms inference, 3.5ms NMS per image at shape (1, 3, 416, 416)\n",
+            "Results saved to \u001b[1myolov5/runs/detect/exp2\u001b[0m\n"
+          ]
+        }
+      ],
+      "source": [
+        "!python yolov5/detect.py --weights yolov5/runs/train/exp3/weights/best.pt --img 416 --conf 0.1 --source test/images"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 17
+        },
+        "id": "7iiObB2WCMh6",
+        "outputId": "5c2c1e8a-a857-4284-d627-42f99724c9e8"
+      },
+      "outputs": [
+        {
+          "data": {
+            "application/javascript": "\n    async function download(id, filename, size) {\n      if (!google.colab.kernel.accessAllowed) {\n        return;\n      }\n      const div = document.createElement('div');\n      const label = document.createElement('label');\n      label.textContent = `Downloading \"${filename}\": `;\n      div.appendChild(label);\n      const progress = document.createElement('progress');\n      progress.max = size;\n      div.appendChild(progress);\n      document.body.appendChild(div);\n\n      const buffers = [];\n      let downloaded = 0;\n\n      const channel = await google.colab.kernel.comms.open(id);\n      // Send a message to notify the kernel that we're ready.\n      channel.send({})\n\n      for await (const message of channel.messages) {\n        // Send a message to notify the kernel that we're ready.\n        channel.send({})\n        if (message.buffers) {\n          for (const buffer of message.buffers) {\n            buffers.push(buffer);\n            downloaded += buffer.byteLength;\n            progress.value = downloaded;\n          }\n        }\n      }\n      const blob = new Blob(buffers, {type: 'application/binary'});\n      const a = document.createElement('a');\n      a.href = window.URL.createObjectURL(blob);\n      a.download = filename;\n      div.appendChild(a);\n      a.click();\n      div.remove();\n    }\n  ",
+            "text/plain": [
+              "<IPython.core.display.Javascript object>"
+            ]
+          },
+          "metadata": {},
+          "output_type": "display_data"
+        },
+        {
+          "data": {
+            "application/javascript": "download(\"download_bd6fc902-d327-4332-bf86-0f81058a7d7f\", \"best.pt\", 14358689)",
+            "text/plain": [
+              "<IPython.core.display.Javascript object>"
+            ]
+          },
+          "metadata": {},
+          "output_type": "display_data"
+        }
+      ],
+      "source": [
+        "#export your model's weights for future use\n",
+        "from google.colab import files\n",
+        "files.download('./runs/train/exp/weights/best.pt')"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {
+        "id": "rNn-obvOGITm"
+      },
+      "outputs": [],
+      "source": []
+    }
+  ],
+  "metadata": {
+    "accelerator": "GPU",
+    "colab": {
+      "provenance": []
+    },
+    "gpuClass": "standard",
+    "kernelspec": {
+      "display_name": "Python 3",
+      "name": "python3"
+    },
+    "language_info": {
+      "codemirror_mode": {
+        "name": "ipython",
+        "version": 3
+      },
+      "file_extension": ".py",
+      "mimetype": "text/x-python",
+      "name": "python",
+      "nbconvert_exporter": "python",
+      "pygments_lexer": "ipython3",
+      "version": "3.8.18"
+    }
+  },
+  "nbformat": 4,
+  "nbformat_minor": 0
+}

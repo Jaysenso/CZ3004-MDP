@@ -1,0 +1,1 @@
+Capture Edge Cases --> Downscale + Crop --> Manually Remove unclear --> Semi Supervised Annotation --> Manually Remove unclear again --> Upload to Roboflow --> Download + Augmentation --> Finetune model
