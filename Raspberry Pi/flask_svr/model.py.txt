@@ -287,7 +287,7 @@ def predict_image(image, model, signal):
         print(f"Final result: NA")
         return 'NA'
 
-def predict_image_week_9(image, model):
+def predict_image_task_2(image, model):
     # Load the image
     img = Image.open(os.path.join('uploads', image))
     # Run inference
