@@ -93,7 +93,7 @@ def image_predict():
     uploaded_file.save(os.path.join('uploads', filename))
     constituents = uploaded_file.filename.split("_")
     obstacle_id = constituents[1]
-    image_id = predict_image_week_9(filename,loaded_model)
+    image_id = predict_image_task_2(filename,loaded_model)
 
     # Return the obstacle_id and image_id
     result = {
